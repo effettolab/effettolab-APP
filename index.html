@@ -87,7 +87,7 @@ const sb=window.supabase&&SB_URL&&SB_KEY?window.supabase.createClient(SB_URL,SB_
 const $=s=>document.querySelector(s),v=i=>$('#'+i).value;
 const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TECH_YEISON='1cf30c52-5f3f-4957-a303-a8dc1a83c5d3',TECH_NANDO='98dc67ce-7bae-4735-a74f-03734c212759';
-const MODS={panel:'Panel',facturacion:'Facturación',ordenes:'Órdenes',clientes:'Clientes',inventario:'Inventario',caja:'Caja',seguimiento:'Seguimiento de mantenimiento',portafolio:'Portafolio',usuarios:'Usuarios',pagosTecnicos:'Pagos a técnicos'};
+const MODS={panel:'Panel',ordenes:'Órdenes',facturacion:'Facturación',clientes:'Clientes',inventario:'Inventario',caja:'Caja',pagosTecnicos:'Pagos a técnicos',seguimiento:'Seguimiento de mantenimiento',portafolio:'Portafolio',usuarios:'Usuarios'};
 const PM=Object.assign({},Object.fromEntries(Object.entries(MODS).filter(([k])=>k!=='pagosTecnicos')),{'$':'Ver pagos y ganancias','inv+':'Editar inventario'});
 const ST=['Recibido','Diagnóstico','En trabajo','Listo','Entregado'];
 const TP=['Reparación','Mantenimiento','Ensamble de pedalboard','Mantenimiento de pedalboard','Venta de equipo'];
