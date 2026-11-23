@@ -1,4 +1,3 @@
-
 /* Configuración pública del frontend para Effetto Lab */
 window.APP_CONFIG = {
   SUPABASE_URL: 'https://bwslpdrfvetwdlyxshxe.supabase.co',
