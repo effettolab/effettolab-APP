@@ -3,9 +3,6 @@ const UI_CLIENT = "(()=>{const boot=()=>{const app=document.getElementById(\"app
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const assetUrl = new URL(request.url);
-    assetUrl.protocol = 'https:';
-    assetUrl.hostname = 'd29dc2e6-long-heart-03db.nangoespinal1.workers.dev';
     const response = await env.ASSETS.fetch(request);
     if (!response || !response.ok) return response;
     const type = response.headers.get('content-type') || '';
