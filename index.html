@@ -87,7 +87,7 @@ const sb=window.supabase&&SB_URL&&SB_KEY?window.supabase.createClient(SB_URL,SB_
 const $=s=>document.querySelector(s),v=i=>$('#'+i).value;
 const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TECH_YEISON='1cf30c52-5f3f-4957-a303-a8dc1a83c5d3',TECH_NANDO='98dc67ce-7bae-4735-a74f-03734c212759';
-const MODS={panel:'Panel',ordenes:'Órdenes',facturacion:'Facturación',clientes:'Clientes',inventario:'Inventario',caja:'Caja',pagosTecnicos:'Pagos a técnicos',seguimiento:'Seguimiento de mantenimiento',portafolio:'Portafolio',usuarios:'Usuarios'};
+const MODS={panel:'Panel',ordenes:'Órdenes',facturacion:'Facturación',clientes:'Clientes',inventario:'Inventario',caja:'Caja',pagosTecnicos:'Pagos a técnicos',seguimiento:'Seguimiento de mantenimiento',portafolio:'Consignaciones',usuarios:'Usuarios'};
 const PM=Object.assign({},Object.fromEntries(Object.entries(MODS).filter(([k])=>k!=='pagosTecnicos')),{'$':'Ver pagos y ganancias','inv+':'Editar inventario'});
 const ST=['Recibido','Diagnóstico','En trabajo','Listo','Entregado'];
 const TP=['Reparación','Mantenimiento','Ensamble de pedalboard','Mantenimiento de pedalboard','Venta de equipo'];
@@ -108,7 +108,7 @@ const catalogLabel=s=>`${s.name} · ${s.item_type||'Producto'}`;
 const findCatalogItem=value=>{const raw=String(value||'').trim();return D.s.find(s=>catalogLabel(s)===raw)||D.s.find(s=>s.name===raw)||D.s.find(s=>nz(s.name)===nz(raw))||null};
 const orderText=o=>{const p=String(o?.problem||'').trim(),d=String(o?.diagnosis||'').trim();return [p,d&&p?'Diagnóstico y trabajo realizado:\n'+d:d].filter(Boolean).join('\n\n')};
 const accessoryText=o=>[['Bulto',o.accessory_bag],['Correa',o.accessory_strap],['Púa',o.accessory_pick],['Palanca',o.accessory_tremolo_bar],['Capotraste',o.accessory_capo]].map(([n,v])=>n+': '+(v?'Sí':'No')).join(' · ');
-let me=null,perms=[],D={c:[],o:[],p:[],s:[],sc:[],x:[],t:[],pf:[],u:[],rp:[],iv:[],ii:[],ip:[],ca:[],oi:[],ph:[],mf:[],mc:[],techs:[],te:[],tp:[],tpi:[],sp:[],costs:[],salesComm:[]},vw='panel',fl='Todas',Q={c:'',s:''},FS,RC,B=nb(),OFORM=null,OLINES=[],MCONTACT_ID=null;
+let me=null,perms=[],D={c:[],o:[],p:[],s:[],sc:[],x:[],t:[],pf:[],u:[],rp:[],iv:[],ii:[],ip:[],ca:[],oi:[],ph:[],mf:[],mc:[],techs:[],te:[],tp:[],tpi:[],sp:[],costs:[],salesComm:[],csales:[],csettles:[]},vw='panel',fl='Todas',Q={c:'',s:''},FS,RC,B=nb(),OFORM=null,OLINES=[],MCONTACT_ID=null;
 let cashFrom=td().slice(0,8)+'01',cashTo=td(),techPeriod='week',techFrom=td().slice(0,8)+'01',techTo=td();
 const can=m=>!!me&&(m==='pagosTecnicos'?(me.id===TECH_YEISON||me.id===TECH_NANDO):(me.role=='Administrador'||perms.includes(m)));
 const mo=()=>can('$');
@@ -140,6 +140,7 @@ async function refresh(){
   g('stock',can('inventario')||can('facturacion')||can('ordenes'),['name',true]),g('stock_costs',can('$')),g('expenses',can('caja'),['id',false]),
   g('content_tasks',can('portafolio'),['scheduled_on',true]),g('portfolio',can('portafolio'),['id',false]),g('profiles',can('usuarios'),['name',true]),g('invoices',can('facturacion'),['id',false]),g('invoice_items',can('facturacion')),g('invoice_payments',can('facturacion')||can('$'),['paid_on',false]),g('cash_adjustments',can('caja'),['adjusted_on',false]),g('order_items',can('ordenes'),['id',true]),g('order_photos',can('ordenes'),['id',true]),g('maintenance_followups',can('seguimiento'),['next_due_on',true]),g('maintenance_contact_logs',can('seguimiento'),['contacted_at',false])]);
  D.techs=await g('technicians',can('ordenes')||can('pagosTecnicos'),['display_name',true]);
+ [D.csales,D.csettles]=await Promise.all([g('consignment_sales',can('portafolio'),['sold_at',false]),g('consignment_settlements',can('portafolio'),['paid_on',false])]);
  D.sp=await g('stock_photos',can('inventario')||can('facturacion')||can('ordenes'),['id',true]);
  D.costs=await g('cost_snapshots',mo(),['captured_at',false]);
  D.salesComm=await g('sales_commissions',can('facturacion')||can('pagosTecnicos'),['created_at',false]);
@@ -213,10 +214,21 @@ return `<div class="r"><h2 class="g1">Caja y gastos</h2><button class="b o" data
 <div class="c"><h3 style="margin-top:0">Saldos pendientes de clientes (${pending.length+pendingOrders.length})</h3>${pendingOrders.map(o=>{const bal=Math.max(Number(o.agreed_amount||0)-pd(o),0),c=cl(o.client_id);return `<div class="r m"><span class="g1">OT-${o.id} · ${e(c.name)} · ${e(o.item)} · ${e(o.status)}</span><b class="er">${fm(bal)}</b><button class="b o" data-a="cob" data-i="${o.id}">Registrar abono</button></div>`}).join('')}${pending.map(iv=>`<div class="r m"><span class="g1">F-${iv.id} · ${e(iv.client_id?cl(iv.client_id).name:'Cliente de mostrador')} · ${iv.issued_on}</span><b class="er">${fm(Math.max(ivT(iv)-Number(iv.paid_amount||0),0))}</b><button class="b o" data-a="payiv" data-i="${iv.id}">Registrar abono</button></div>`).join('')}${!pending.length&&!pendingOrders.length?'<p class="m">No hay facturas ni órdenes con saldo pendiente.</p>':''}</div>
  <div class="c"><h3 style="margin-top:0">Comprobantes de transferencias</h3>${D.p.filter(p=>p.method=='Transferencia'&&p.voucher_url).slice().sort((a,b)=>b.id-a.id).slice(0,12).map(p=>`<div class='r m'><span class='g1'>OT-${p.order_id} · ${p.paid_on} · ${fm(p.amount)} · ${e(p.voucher_name||'Comprobante')}</span><a href='${e(p.voucher_url)}' target='_blank' rel='noopener'>Ver comprobante</a></div>`).join('')}${D.ip.filter(p=>p.method=='Transferencia'&&p.voucher_url).slice().sort((a,b)=>b.id-a.id).slice(0,12).map(p=>`<div class='r m'><span class='g1'>Factura F-${p.invoice_id} · ${p.paid_on} · ${fm(p.amount)} · ${e(p.voucher_name||'Comprobante')}</span><a href='${e(p.voucher_url)}' target='_blank' rel='noopener'>Ver comprobante</a></div>`).join('')}${!D.p.some(p=>p.method=='Transferencia'&&p.voucher_url)&&!D.ip.some(p=>p.method=='Transferencia'&&p.voucher_url)?'<p class="m">No hay comprobantes de transferencia guardados.</p>':''}</div>
  <div class="c"><h3 style="margin-top:0">Últimos ajustes de caja</h3>${D.ca.slice(0,8).map(a=>`<div class="r m"><span class="g1">${a.adjusted_on} · Esperado ${fm(a.expected_amount)} · Contado ${fm(a.counted_amount)}${a.notes?' · '+e(a.notes):''}</span><b class="${a.difference==0?'':'er'}">${fm(a.difference)}</b></div>`).join('')||'<p class="m">Aún no hay ajustes registrados.</p>'}</div>`},
-portafolio(){return `<div class="r"><h2 class="g1">Portafolio y contenido</h2><button class="b" data-a="nT">Nueva tarea</button></div><h3>Calendario de contenido</h3>
-${D.t.map(t=>`<div class="c"><div class="r"><b class="g1">${e(t.title)}</b><span class="t${t.status=='Completado'?' l':''}">${t.status}</span></div><div class="m"><span>${t.scheduled_on||'Sin fecha'}</span><span>${e(t.platform)}</span><span>Responsable: ${e(t.responsible)}</span></div><div>${e(t.description)}</div><div class="r" style="margin-top:8px"><button class="b o" data-a="eT" data-i="${t.id}">Editar</button></div></div>`).join('')||'<p class="m">Aún no hay tareas de contenido.</p>'}
-<h3>Trabajos entregados</h3>${D.pf.map(o=>`<div class="c r"><div class="g1"><b>${e(o.item)}</b><div class="m">${e(o.job_type)}</div></div><button class="b o" data-a="nT" data-i="${o.id}">Crear contenido</button></div>`).join('')||'<p class="m">Aún no hay trabajos entregados.</p>'}`},
-facturacion(){const tot=billTotal(),due=billDue(),q=B.kind!='Factura',tender=B.paid===''?due:(+B.paid||0),change=B.pay=='Efectivo'?Math.max(tender-due,0):0;
+portafolio(){
+ const items=D.s.filter(s=>s.ownership_type==='Consignación'&&(s.item_type||'Producto')==='Producto'&&nz(s.name+' '+s.consignor_name).includes(nz(Q.s)));
+ const pending=D.csales.filter(x=>x.status==='Pendiente'),settled=D.csales.filter(x=>x.status==='Liquidado');
+ const pendingTotal=pending.reduce((n,x)=>n+Number(x.owner_amount||0),0),settledTotal=settled.reduce((n,x)=>n+Number(x.owner_amount||0),0);
+ const consignors=[...new Set(pending.map(x=>x.consignor_name))];
+ const termLabel=s=>s.consignment_terms_type==='owner_percent'?'Propietario recibe '+s.consignment_terms_value+'%':s.consignment_terms_type==='store_fixed'?'EFFETTO LAB retiene '+fm(s.consignment_terms_value)+' por unidad':s.consignment_terms_type==='owner_fixed'?'Propietario recibe '+fm(s.consignment_terms_value)+' por unidad':'Acuerdo pendiente';
+ return '<div class="r"><h2 class="g1">Consignaciones</h2><button class="b" data-a="newConsignment">Recibir equipo</button></div>'+
+ '<p class="m">Equipos de terceros recibidos para venta. Cada registro se comparte con Inventario y Facturación; no se duplica el artículo.</p>'+
+ '<div class="g"><div class="c s"><b>'+items.length+'</b><span>Equipos disponibles</span></div><div class="c s"><b>'+D.csales.length+'</b><span>Ventas de consignación</span></div><div class="c s"><b>'+fm(pendingTotal)+'</b><span>Pendiente de entregar a propietarios</span></div><div class="c s"><b>'+fm(settledTotal)+'</b><span>Ya liquidado a propietarios</span></div></div>'+
+ '<h3>Equipos recibidos</h3>'+SBX('qs',Q.s,'Buscar equipo o consignador')+
+ items.map(s=>'<div class="c"><div class="r"><b class="g1">'+e(s.name)+'</b><span class="t '+(s.qty>0?'l':'')+'">'+(s.qty>0?'Disponible':'Agotado')+'</span><button class="b o" data-a="eS" data-i="'+s.id+'">Editar</button></div><div class="m"><span>Propietario: <b>'+e(s.consignor_name)+'</b></span><span>Unidades: '+s.qty+'</span><span>Precio de referencia: '+fm(s.price)+'</span></div><div class="m"><span>'+e(termLabel(s))+'</span></div>'+(s.consignment_notes?'<p>'+e(s.consignment_notes)+'</p>':'')+'</div>').join('')||'<p class="m">No hay equipos de consignación que coincidan con la búsqueda.</p>'+
+ '<h3>Ventas y liquidaciones pendientes</h3>'+consignors.map(name=>{const rows=pending.filter(x=>x.consignor_name===name),amount=rows.reduce((n,x)=>n+Number(x.owner_amount),0);return '<div class="c"><div class="r"><b class="g1">'+e(name)+'</b><b>'+fm(amount)+'</b></div><div class="m">'+rows.length+' venta(s) pendiente(s) de liquidar</div><button class="b" data-a="settleCons" data-i="'+e(name)+'">Registrar liquidación</button></div>'}).join('')||'<p class="m">No hay liquidaciones pendientes.</p>'+
+ '<h3>Historial de ventas</h3>'+D.csales.slice().sort((a,b)=>String(b.sold_at).localeCompare(String(a.sold_at))).map(x=>{const it=D.ii.find(y=>y.id===x.invoice_item_id);return '<div class="c"><div class="r"><b class="g1">'+e(it?.description||'Equipo en consignación')+'</b><span class="t '+(x.status==='Liquidado'?'l':'')+'">'+e(x.status)+'</span></div><div class="m"><span>Factura F-'+x.invoice_id+'</span><span>Propietario: '+e(x.consignor_name)+'</span><span>Venta: '+fm(x.gross_amount)+'</span></div><div class="m"><span>Para propietario: <b>'+fm(x.owner_amount)+'</b></span><span>EFFETTO LAB: <b>'+fm(x.business_amount)+'</b></span></div>'+(x.settlement_id?'<div class="m">Liquidación #'+x.settlement_id+'</div>':'')+'</div>'}).join('')||'<p class="m">Todavía no se han vendido equipos en consignación.</p>'+
+ '<h3>Historial de liquidaciones</h3>'+D.csettles.slice().sort((a,b)=>String(b.paid_on).localeCompare(String(a.paid_on))).map(x=>'<div class="c"><div class="r"><b class="g1">'+e(x.consignor_name)+'</b><b>'+fm(x.amount)+'</b></div><div class="m"><span>'+x.paid_on+'</span><span>'+e(x.method)+'</span><span>Liquidación #'+x.id+'</span></div>'+(x.notes?'<p>'+e(x.notes)+'</p>':'')+'</div>').join('')||'<p class="m">No hay liquidaciones registradas.</p>';
+},facturacion(){const tot=billTotal(),due=billDue(),q=B.kind!='Factura',tender=B.paid===''?due:(+B.paid||0),change=B.pay=='Efectivo'?Math.max(tender-due,0):0;
 return `<h2>Facturación y cotizaciones</h2><div class='c' style='margin-top:10px'><label style='margin:0'>Tipo de documento</label><select data-a='bk'><option value='Factura'${q?'':' selected'}>Factura</option><option value='Cotización'${q?' selected':''}>Cotización</option></select>
 <label>Cliente (opcional; escribe o selecciona para buscar)</label><input data-a='bc' list='dlc' value='${e(B.client)}' placeholder='Cliente de mostrador'><datalist id='dlc'>${D.c.map(c=>`<option value="${e(clientLabel(c))}">`).join('')}</datalist>
 <label>¿Quién realizó la venta?</label><select data-a='bseller'><option value=''${B.salesperson_id?'':' selected'}>Sin atribuir</option>${D.techs.filter(t=>[TECH_YEISON,TECH_NANDO].includes(t.user_id)&&(mo()||t.user_id===me.id)).map(t=>`<option value='${t.user_id}'${String(B.salesperson_id||'')===String(t.user_id)?' selected':''}>${e(t.display_name||(t.user_id===TECH_YEISON?'Jason':'Nando'))}</option>`).join('')}</select><p class='m'>La comisión comercial se registra solo sobre conceptos de tipo Producto. Las reparaciones y otros servicios permanecen separados; el porcentaje se definirá por acuerdo.</p>
@@ -385,7 +397,7 @@ async function uploadStockPhotos(stockId,files){
  }
  return {uploaded,warnings};
 }
-const updateStockFormFields=()=>{const service=$('#f_item_type')?.value==='Servicio',owner=$('#f_ownership_type');if(service&&owner)owner.value='Propio';const consignment=!service&&owner?.value==='Consignación';const ownerWrap=$('#w_ownership_type');if(ownerWrap)ownerWrap.style.display=service?'none':'';['qty','min_qty'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=service?'none':''});['consignor_name','consignment_notes'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=consignment?'':'none'});const cost=$('#w_cost');if(cost)cost.style.display=service||consignment?'none':'';const photos=$('#w_photos');if(photos)photos.style.display=service?'none':'';if(service){if($('#f_qty'))$('#f_qty').value='0';if($('#f_min_qty'))$('#f_min_qty').value='0'}};
+const updateStockFormFields=()=>{const service=$('#f_item_type')?.value==='Servicio',owner=$('#f_ownership_type'),term=$('#f_consignment_terms_type');if(service&&owner)owner.value='Propio';const consignment=!service&&owner?.value==='Consignación';const ownerWrap=$('#w_ownership_type');if(ownerWrap)ownerWrap.style.display=service?'none':'';['qty','min_qty'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=service?'none':''});['consignor_name','consignment_notes','consignment_terms_type','consignment_terms_value'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=consignment?'':'none'});const valLabel=$('#w_consignment_terms_value')?.querySelector('label');if(valLabel)valLabel.textContent=term?.value==='owner_percent'?'Porcentaje que corresponde al propietario (%)':term?.value==='store_fixed'?'Comisión fija de EFFETTO LAB por unidad (RD$)':'Importe fijo que corresponde al propietario por unidad (RD$)';const cost=$('#w_cost');if(cost)cost.style.display=service||consignment?'none':'';const photos=$('#w_photos');if(photos)photos.style.display=service?'none':'';if(service){if($('#f_qty'))$('#f_qty').value='0';if($('#f_min_qty'))$('#f_min_qty').value='0'}};
 const fS=s=>{
  const c=s&&(D.sc.find(x=>x.stock_id==s.id)||{}).cost;
  const init=s&&Object.assign({},s,{item_type:s.item_type||'Producto',ownership_type:s.ownership_type||'Propio',cost:c});
@@ -394,7 +406,9 @@ const fS=s=>{
   {k:'item_type',l:'Tipo de artículo',t:'s',on:'stocktype',o:[['Producto','Producto'],['Servicio','Servicio']]},
   {k:'ownership_type',l:'Propiedad del artículo',t:'s',on:'ownershiptype',o:[['Propio','Propio de EFFETTO LAB'],['Consignación','En consignación']]},
   {k:'consignor_name',l:'Nombre del consignador'},
-  {k:'consignment_notes',l:'Notas de consignación (liquidación por acordar)',t:'a'},
+  {k:'consignment_notes',l:'Notas y condiciones particulares',t:'a'},
+  {k:'consignment_terms_type',l:'Acuerdo económico individual',t:'s',on:'consignmenttermstype',o:[['','Seleccionar acuerdo'],['owner_fixed','Importe fijo para el propietario por unidad'],['owner_percent','Porcentaje para el propietario'],['store_fixed','Comisión fija para EFFETTO LAB por unidad']]},
+  {k:'consignment_terms_value',l:'Valor del acuerdo (RD$ o %)',t:'number'},
   {k:'qty',l:'Cantidad disponible',t:'number',d:0},
   {k:'min_qty',l:'Stock mínimo',t:'number',d:0},
   {k:'price',l:'Precio de venta (RD$)',t:'number',d:0}
@@ -406,9 +420,15 @@ const fS=s=>{
   x.ownership_type=x.item_type==='Servicio'?'Propio':(x.ownership_type||'Propio');
   if(!['Propio','Consignación'].includes(x.ownership_type))return{message:'Selecciona si el artículo es propio o está en consignación'};
   if(x.ownership_type==='Consignación'&&!String(x.consignor_name||'').trim())return{message:'Indica quién entrega el artículo en consignación'};
-  if(x.ownership_type==='Propio'){x.consignor_name=null;x.consignment_notes=null}else{x.consignor_name=String(x.consignor_name||'').trim();}
+  if(x.ownership_type==='Consignación'){
+   x.consignor_name=String(x.consignor_name||'').trim();
+   if(!['owner_fixed','owner_percent','store_fixed'].includes(x.consignment_terms_type)||x.consignment_terms_value===null||x.consignment_terms_value===undefined||x.consignment_terms_value===''||!Number.isFinite(Number(x.consignment_terms_value))||Number(x.consignment_terms_value)<0)return{message:'Define el acuerdo económico de este equipo antes de guardarlo'};
+   x.consignment_terms_value=Number(x.consignment_terms_value);
+   if(x.consignment_terms_type==='owner_percent'&&x.consignment_terms_value>100)return{message:'El porcentaje del propietario no puede superar el 100%'};
+  }
+  if(x.ownership_type==='Propio'){x.consignor_name=null;x.consignment_notes=null;x.consignment_terms_type=null;x.consignment_terms_value=null}else{x.consignor_name=String(x.consignor_name||'').trim();}
   const cost=x.cost;delete x.cost;
-  if(x.item_type==='Servicio'){x.qty=0;x.min_qty=0;x.ownership_type='Propio';x.consignor_name=null;x.consignment_notes=null}
+  if(x.item_type==='Servicio'){x.qty=0;x.min_qty=0;x.ownership_type='Propio';x.consignor_name=null;x.consignment_notes=null;x.consignment_terms_type=null;x.consignment_terms_value=null}
   else{x.qty=Math.max(0,Number(x.qty)||0);x.min_qty=Math.max(0,Number(x.min_qty)||0)}
   x.price=Math.max(0,Number(x.price)||0);
   const r=s?await sb.from('stock').update(x).eq('id',s.id).select().single():await sb.from('stock').insert(x).select().single();
@@ -458,6 +478,9 @@ else if(k=='nC'){fC();return}
 else if(k=='eC'){fC(f(D.c));return}
 else if(k=='nS'){fS();return}
 else if(k=='eS'){fS(f(D.s));return}
+else if(k=='newConsignment'){fS({item_type:'Producto',ownership_type:'Consignación',qty:1,min_qty:0,price:0});return}
+else if(k=='settleCons'){const name=i,rows=D.csales.filter(x=>x.status==='Pendiente'&&x.consignor_name===name);if(!rows.length){toast('Este consignador no tiene ventas pendientes.');return}M('<h2>Liquidar a '+e(name)+'</h2><p class="m">Selecciona las ventas que se incluirán en esta liquidación.</p><div class="c">'+rows.map(x=>{const it=D.ii.find(y=>y.id===x.invoice_item_id);return '<label class="r"><input class="cons-sale-check" type="checkbox" value="'+x.id+'" checked style="width:auto"><span class="g1">F-'+x.invoice_id+' · '+e(it?.description||'Equipo')+'</span><b>'+fm(x.owner_amount)+'</b></label>'}).join('')+'</div><label>Fecha del pago</label><input id="cons_paid_on" type="date" value="'+td()+'"><label>Método de pago</label><select id="cons_method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Otro</option></select><label>Nota (opcional)</label><textarea id="cons_notes" rows="2"></textarea><button class="b" data-a="saveConsSettlement" data-i="'+e(name)+'">Confirmar liquidación</button>');return}
+else if(k=='saveConsSettlement'){const ids=[...document.querySelectorAll('.cons-sale-check:checked')].map(x=>Number(x.value));if(!ids.length){toast('Selecciona al menos una venta.');return}a.disabled=true;const r=await sb.rpc('register_consignment_settlement',{p_consignor_name:i,p_sale_ids:ids,p_paid_on:$('#cons_paid_on')?.value||td(),p_method:$('#cons_method')?.value||'Efectivo',p_notes:$('#cons_notes')?.value||null});if(r.error){a.disabled=false;toast(r.error.message);return}X();await refresh();R();toast('Liquidación registrada correctamente.');return}
 else if(k=='stk'){const s=f(D.s),r=await sb.from('stock').update({qty:Math.max(0,s.qty+(+a.dataset.d))}).eq('id',s.id);if(r.error)toast(r.error.message);rf=1}
 else if(k=='nG'){fG();return}
 else if(k=='nA'){fA();return}
@@ -490,7 +513,7 @@ if(k=='src'){$('#w_referred_by').style.display=t.value=='Referido'?'':'none';ret
 if(k=='paymethod'){const w=$('#pay_voucher_wrap');if(w)w.style.display=t.value==='Transferencia'?'':'none';return}
 if(k=='invoicepaymethod'||k=='convertmethod'){const w=$('#w_voucher');if(w)w.style.display=t.value==='Transferencia'?'':'none';return}
 if(k=='mint'){const r=await sb.rpc('update_maintenance_interval',{p_followup_id:Number(i),p_interval_months:Number(t.value)});if(r.error){toast(r.error.message);return}await refresh();R();toast('Intervalo de mantenimiento actualizado');return}
-if(k=='stocktype'||k=='ownershiptype'){updateStockFormFields();return}
+if(k=='stocktype'||k=='ownershiptype'||k=='consignmenttermstype'){updateStockFormFields();return}
 if(k=='bc'){B.client=t.value;return}
 if(k=='sourceorder'){
  const next=t.value?Number(t.value):null;
