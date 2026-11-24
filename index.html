@@ -140,7 +140,7 @@ async function refresh(){
   g('stock',can('inventario')||can('facturacion')||can('ordenes'),['name',true]),g('stock_costs',can('$')),g('expenses',can('caja'),['id',false]),
   g('content_tasks',can('portafolio'),['scheduled_on',true]),g('portfolio',can('portafolio'),['id',false]),g('profiles',can('usuarios'),['name',true]),g('invoices',can('facturacion'),['id',false]),g('invoice_items',can('facturacion')),g('invoice_payments',can('facturacion')||can('$'),['paid_on',false]),g('cash_adjustments',can('caja'),['adjusted_on',false]),g('order_items',can('ordenes'),['id',true]),g('order_photos',can('ordenes'),['id',true]),g('maintenance_followups',can('seguimiento'),['next_due_on',true]),g('maintenance_contact_logs',can('seguimiento'),['contacted_at',false])]);
  D.techs=await g('technicians',can('ordenes')||can('pagosTecnicos'),['display_name',true]);
- [D.csales,D.csettles]=await Promise.all([g('consignment_sales',can('portafolio'),['sold_at',false]),g('consignment_settlements',can('portafolio'),['paid_on',false])]);
+ [D.csales,D.csettles]=await Promise.all([g('consignment_sales',can('portafolio')||can('caja'),['sold_at',false]),g('consignment_settlements',can('portafolio'),['paid_on',false])]);
  D.sp=await g('stock_photos',can('inventario')||can('facturacion')||can('ordenes'),['id',true]);
  D.costs=await g('cost_snapshots',mo(),['captured_at',false]);
  D.salesComm=await g('sales_commissions',can('facturacion')||can('pagosTecnicos'),['created_at',false]);
