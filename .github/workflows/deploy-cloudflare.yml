@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy Worker and static assets
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: "1ce5f80c772cc71aee05f582e9e22432"
