@@ -409,7 +409,7 @@ return `<div id="w_${f.k}"><label>${f.l}</label>${c}</div>`};
 M(`<h2>${ti}</h2>${fs.map(fld).join('')}<div style="margin-top:12px"><button class="b" data-a="sv">Guardar</button></div>`);
 if($('#w_referred_by'))$('#w_referred_by').style.display=init.source=='Referido'?'':'none'}
 const wr=(r,x)=>r;
-const fC=c=>form(c?'Editar cliente':'Nuevo cliente',[{k:'name',l:'Nombre'},{k:'phone',l:'Teléfono con WhatsApp',t:'tel'},{k:'source',l:'Cómo nos conoció',t:'s',on:'src',o:[['','Sin dato']].concat(SRC.map(s=>[s,s=='Referido'?'Referido por otro cliente':s]))},{k:'referred_by',l:'Nombre de quien lo refirió'},{k:'address',l:'Dirección de envío'}],c,async x=>{if(!x.name)return{message:'Falta el nombre'};x.phone=(x.phone||'').replace(/\D/g,'');if(x.source!='Referido')x.referred_by=null;return (c?await sb.from('clients').update(x).eq('id',c.id):await sb.from('clients').insert(x)).error});
+const fC=c=>{form(c?'Editar cliente':'Nuevo cliente',[{k:'name',l:'Nombre'},{k:'phone',l:'Teléfono con WhatsApp',t:'tel'},{k:'source',l:'Cómo nos conoció',t:'s',on:'src',o:[['','Sin dato']].concat(SRC.map(s=>[s,s=='Referido'?'Referido por otro cliente':s]))},{k:'referred_by',l:'Nombre de quien lo refirió'},{k:'address',l:'Dirección de envío'}],c,async x=>{if(!x.name)return{message:'Falta el nombre'};x.phone=(x.phone||'').replace(/\\D/g,'');if(x.source!='Referido')x.referred_by=null;return (c?await sb.from('clients').update(x).eq('id',c.id):await sb.from('clients').insert(x)).error});if(!c){const row=$('#m [data-a="sv"]')?.parentElement;if(row)row.insertAdjacentHTML('beforebegin','<div style="margin-top:10px"><button type="button" class="b o" data-a="pickClientContact">Buscar en la agenda del teléfono</button><p class="m">Selecciona un contacto para completar nombre y teléfono. No se guarda hasta pulsar Guardar.</p></div>')}};
 const renderOrderLines=()=>{const list=$('#order_lines'),total=$('#order_total');if(!list||!total)return;list.innerHTML=OLINES.map((l,n)=>{const locked=l.order_item_id&&D.ii.some(x=>x.order_item_id==l.order_item_id);return `<div class="c catalog-line"><div class="r"><b class="g1">${e(l.description)}</b><span class="t">${e(l.kind)}${locked?' · vinculada a factura/cotización':''}</span><button type="button" class="b o" data-a="oiRemove" data-i="${n}" ${locked?'disabled title="Esta línea está vinculada a un documento de facturación"':''}>Quitar</button></div><div class="g"><div><label>Cantidad</label><input type="number" min="0.01" step="${l.kind==='Producto'?'1':'0.01'}" data-a="oiqty" data-i="${n}" value="${e(l.qty)}" ${locked?'readonly':''}></div><div><label>Precio unitario (RD$)</label><input type="number" min="0" step="0.01" data-a="oiprice" data-i="${n}" value="${e(l.unit_price)}" ${locked?'readonly':''}></div><div><label>Importe</label><input readonly value="${fm(Number(l.qty)*Number(l.unit_price))}"></div></div></div>`}).join('')||'<p class="m">Aún no hay productos o servicios en esta orden.</p>';total.textContent=fm(OLINES.reduce((n,l)=>n+Number(l.qty||0)*Number(l.unit_price||0),0))};
 const orderPhotoMarkup=id=>D.ph.filter(ph=>ph.order_id==id&&ph.url).length?`<div class="photo-strip">${D.ph.filter(ph=>ph.order_id==id&&ph.url).map(ph=>`<a href="${e(ph.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${e(ph.url)}" alt="Foto del equipo">${e(ph.original_name)}</a>`).join('')}</div>`:'';
 const technicianChoices=(selected)=>{
@@ -481,10 +481,12 @@ async function uploadStockPhotos(stockId,files){
  }
  return {uploaded,warnings};
 }
-const updateStockFormFields=()=>{const service=$('#f_item_type')?.value==='Servicio',owner=$('#f_ownership_type'),term=$('#f_consignment_terms_type');if(service&&owner)owner.value='Propio';const consignment=!service&&owner?.value==='Consignación';const ownerWrap=$('#w_ownership_type');if(ownerWrap)ownerWrap.style.display=service?'none':'';['qty','min_qty'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=service?'none':''});['consignor_name','consignment_notes','consignment_terms_type','consignment_terms_value'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=consignment?'':'none'});const valLabel=$('#w_consignment_terms_value')?.querySelector('label');if(valLabel)valLabel.textContent=term?.value==='owner_percent'?'Porcentaje que corresponde al propietario (%)':term?.value==='store_fixed'?'Comisión fija de EFFETTO LAB por unidad (RD$)':'Importe fijo que corresponde al propietario por unidad (RD$)';const cost=$('#w_cost');if(cost)cost.style.display=service||consignment?'none':'';const photos=$('#w_photos');if(photos)photos.style.display=service?'none':'';if(service){if($('#f_qty'))$('#f_qty').value='0';if($('#f_min_qty'))$('#f_min_qty').value='0'}};
-const fS=s=>{
+let STOCK_FORM_MODE='auto';
+const updateStockFormFields=()=>{const service=$('#f_item_type')?.value==='Servicio',owner=$('#f_ownership_type'),term=$('#f_consignment_terms_type');if(service&&owner)owner.value='Propio';const consignment=STOCK_FORM_MODE==='consignment'||(!service&&owner?.value==='Consignación');const ownerWrap=$('#w_ownership_type');if(ownerWrap)ownerWrap.style.display=STOCK_FORM_MODE==='auto'&&!service?'':'none';const typeWrap=$('#w_item_type');if(typeWrap)typeWrap.style.display=STOCK_FORM_MODE==='consignment'?'none':'';['qty','min_qty'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=service?'none':''});['consignor_name','consignment_notes','consignment_terms_type','consignment_terms_value'].forEach(k=>{const w=$('#w_'+k);if(w)w.style.display=consignment?'':'none'});const valLabel=$('#w_consignment_terms_value')?.querySelector('label');if(valLabel)valLabel.textContent=term?.value==='owner_percent'?'Porcentaje que corresponde al propietario (%)':term?.value==='store_fixed'?'Comisión fija de EFFETTO LAB por unidad (RD$)':'Importe fijo que corresponde al propietario por unidad (RD$)';const cost=$('#w_cost');if(cost)cost.style.display=service||consignment?'none':'';const photos=$('#w_photos');if(photos)photos.style.display=service?'none':'';if(service){if($('#f_qty'))$('#f_qty').value='0';if($('#f_min_qty'))$('#f_min_qty').value='0'}};
+const fS=(s,mode='auto')=>{
+ STOCK_FORM_MODE=mode;
  const c=s&&(D.sc.find(x=>x.stock_id==s.id)||{}).cost;
- const init=s&&Object.assign({},s,{item_type:s.item_type||'Producto',ownership_type:s.ownership_type||'Propio',cost:c});
+ const init=Object.assign({item_type:'Producto',ownership_type:mode==='consignment'?'Consignación':'Propio'},s||{},{item_type:s?.item_type||'Producto',ownership_type:mode==='consignment'?'Consignación':mode==='own'?'Propio':(s?.ownership_type||'Propio'),cost:c});
  const fields=[
   {k:'name',l:'Nombre'},
   {k:'item_type',l:'Tipo de artículo',t:'s',on:'stocktype',o:[['Producto','Producto'],['Servicio','Servicio']]},
@@ -497,7 +499,10 @@ const fS=s=>{
   {k:'min_qty',l:'Stock mínimo',t:'number',d:0},
   {k:'price',l:'Precio de venta (RD$)',t:'number',d:0}
  ].concat(mo()?[{k:'cost',l:'Costo unitario propio (RD$; dejar vacío si no está confirmado)',t:'number'}]:[]).concat([{k:'photos',l:'Fotografías (JPG, PNG, WebP o HEIC; hasta 10 MB por foto)',t:'file',accept:'image/jpeg,image/png,image/webp,image/heic,image/heif',multiple:true}]);
- form(s?.id?'Editar artículo':'Nuevo artículo',fields,init,async x=>{
+ const visibleFields=fields.filter(f=>!(mode==='own'&&f.k==='ownership_type')&&!(mode==='consignment'&&['ownership_type','item_type'].includes(f.k)));
+ form(s?.id?'Editar artículo':'Nuevo artículo',visibleFields,init,async x=>{
+  if(mode==='own')x.ownership_type='Propio';
+  if(mode==='consignment'){x.item_type='Producto';x.ownership_type='Consignación'}
   if(!x.name)return{message:'Falta el nombre'};
   const files=Array.from(x.photos||[]);delete x.photos;
   x.item_type=x.item_type||'Producto';
@@ -617,9 +622,9 @@ else if(k=='cob'){fP(f(D.o));return}
 else if(k=='rec'){showRc(ordDoc(f(D.o)));return}
 else if(k=='nC'){fC();return}
 else if(k=='eC'){fC(f(D.c));return}
-else if(k=='nS'){fS();return}
+else if(k=='nS'){fS(null,'own');return}
 else if(k=='eS'){fS(f(D.s));return}
-else if(k=='newConsignment'){fS({item_type:'Producto',ownership_type:'Consignación',qty:1,min_qty:0,price:0});return}
+else if(k=='newConsignment'){fS({item_type:'Producto',ownership_type:'Consignación',qty:1,min_qty:0,price:0},'consignment');return}
 else if(k=='sellConsignment'){fConsignmentSale(f(D.s));return}
 else if(k=='saveConsignmentSale'){
  const s=f(D.s);if(!s){toast('No se encontró el equipo seleccionado.');return}
@@ -686,6 +691,7 @@ else if(k=='cq'){
 else if(k=='pdf'){await mkPdf();return}
 else if(k=='cpy'){try{await navigator.clipboard.writeText(rcText(RC));toast('Texto copiado')}catch(_){toast('No se pudo copiar')}return}
 else if(k=='addrole'){const n=v('nr').trim();if(!n)return;const r=await sb.from('role_perms').insert({role:n,perm:'panel'});if(r.error)toast(r.error.message);rf=1}
+else if(k=='pickClientContact'){if(!navigator.contacts||typeof navigator.contacts.select!=='function'){toast('Este navegador no permite abrir la agenda desde la aplicación. Puedes introducir los datos manualmente.');return}try{const picked=await navigator.contacts.select(['name','tel'],{multiple:false});const c=picked?.[0];if(c){const name=Array.isArray(c.name)?c.name[0]:c.name,phone=Array.isArray(c.tel)?c.tel[0]:c.tel;if(name)$('#f_name').value=name;if(phone)$('#f_phone').value=phone;toast('Contacto cargado en el formulario. Pulsa Guardar para registrarlo.')}}catch(err){if(err?.name!=='AbortError')toast('No se pudo seleccionar el contacto. Puedes completar el formulario manualmente.')}return}
 else if(k=='sv'){a.disabled=true;const o={};FS.fs.forEach(z=>{if(z.t==='file'){o[z.k]=$('#f_'+z.k)?.files||[];return}let x=v('f_'+z.k);o[z.k]=x===''?null:(z.t=='number'||z.n)?+x:x});const er=await FS.save(o);if(er){a.disabled=false;toast(er.message||'No se pudo guardar');return}const done=FS.message||'Guardado';FS.message=null;X();toast(done);rf=1}
 else return;
 if(rf)await refresh();R()});
