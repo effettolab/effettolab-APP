@@ -195,8 +195,8 @@ const unlinkedOrders=D.o.filter(o=>{const completedDate=o.completed_at?String(o.
 const grossInvoiceSales=sold.reduce((n,iv)=>n+ivT(iv),0),grossOrderSales=unlinkedOrders.reduce((n,o)=>n+Number(o.agreed_amount||0),0),grossSales=grossInvoiceSales+grossOrderSales;
 const costSnapshot=(type,id)=>D.costs.find(x=>x.source_type===type&&Number(x.source_item_id)===Number(id));
 let knownCogs=0,missingCostCount=0;
-salesLines.filter(x=>x.kind==='Producto').forEach(x=>{const cost=costSnapshot('invoice_item',x.id);if(cost)knownCogs+=Number(cost.unit_cost)*Number(x.qty);else missingCostCount++});
-const unlinkedOrderLines=D.oi.filter(x=>unlinkedOrders.some(o=>o.id===x.order_id)&&x.kind==='Producto');
+salesLines.filter(x=>x.kind==='Producto'&&!D.s.some(s=>s.id===x.stock_id&&s.ownership_type==='Consignación')).forEach(x=>{const cost=costSnapshot('invoice_item',x.id);if(cost)knownCogs+=Number(cost.unit_cost)*Number(x.qty);else missingCostCount++});
+const unlinkedOrderLines=D.oi.filter(x=>unlinkedOrders.some(o=>o.id===x.order_id)&&x.kind==='Producto'&&!D.s.some(s=>s.id===x.stock_id&&s.ownership_type==='Consignación'));
 unlinkedOrderLines.forEach(x=>{const cost=costSnapshot('order_item',x.id);if(cost)knownCogs+=Number(cost.unit_cost)*Number(x.qty);else missingCostCount++});
 const technicalGenerated=D.te.filter(x=>x.earned_on>=from&&x.earned_on<=to).reduce((n,x)=>n+Number(x.amount),0);
 const technicalPaid=xp.filter(x=>x.category==='Comisión técnica').reduce((n,x)=>n+Number(x.amount),0),otherExpenses=xp.filter(x=>x.category!=='Comisión técnica').reduce((n,x)=>n+Number(x.amount),0);
