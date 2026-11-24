@@ -1,0 +1,10 @@
+name = "long-heart-03db"
+main = "worker.js"
+compatibility_date = "2026-11-18"
+account_id = "1ce5f80c772cc71aee05f582e9e22432"
+
+[assets]
+directory = "./"
+binding = "ASSETS"
+run_worker_first = true
+exclude = ["worker.js", "wrangler.toml", "wrangler.jsonc", ".github/**"]
