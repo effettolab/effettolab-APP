@@ -522,7 +522,18 @@ else if(k=='fl')fl=i;
 else if(k=='x'){X();return}
 else if(k=='out'){await sb.auth.signOut();return}
 else if(k=='in'){const r=await sb.auth.signInWithPassword({email:v('le').trim(),password:v('lp')});if(r.error){$('#lm').textContent='Correo o contraseña incorrectos';return}await boot(r.data.user);return}
-else if(k=='adv'){const o=f(D.o),next=ST[ST.indexOf(o.status)+1];if(next==='Listo'){const opts=technicianChoices(o.technician_id||'');if(!opts){toast('No hay técnicos activos configurados.');return}M(`<h2>Completar OT-${o.id}</h2><p class="m">Confirma quién realizó finalmente el trabajo. Puedes corregir el técnico aquí. El monto es opcional; si lo dejas vacío y ya estaba indicado en la orden, se conservará.</p><div class="tech-assign"><b>Técnico responsable</b><div class="tech-choices">${opts}</div><label style="margin-top:12px">Monto del técnico (RD$) · opcional</label><input id="complete_amount" type="number" min="0.01" step="0.01" value="${o.technician_amount!=null?e(o.technician_amount):''}" placeholder="Déjalo vacío para registrarlo después"></div><div class="r" style="margin-top:12px"><button class="b" data-a="completeOrder" data-i="${o.id}">Guardar y pasar a Listo</button><button class="b o" data-a="x">Cancelar</button></div>`);return}const r=await sb.rpc('advance_work_order',{p_order_id:o.id,p_next_status:next});if(r.error){toast(r.error.message);return}rf=1}
+else if(k=='adv'){
+ const o=f(D.o),next=ST[ST.indexOf(o.status)+1];
+ if(next==='Listo'){
+  if(!o.technician_id){toast('Asigna primero el técnico responsable desde Editar orden.');return}
+  const r=await sb.rpc('complete_work_order',{p_order_id:o.id,p_technician_id:o.technician_id,p_technician_amount:o.technician_amount??null});
+  if(r.error){toast(r.error.message);return}
+ }else{
+  const r=await sb.rpc('advance_work_order',{p_order_id:o.id,p_next_status:next});
+  if(r.error){toast(r.error.message);return}
+ }
+ rf=1
+}
 else if(k=='completeOrder'){const technician=$('input[name="o_technician"]:checked')?.value||null,raw=$('#complete_amount')?.value.trim()||'',amount=raw===''?null:Number(raw);if(!technician){toast('Selecciona el técnico que completó el trabajo.');return}if(amount!==null&&(!(amount>0)||!Number.isFinite(amount))){toast('El monto debe ser mayor que cero o dejarse vacío.');return}a.disabled=true;const r=await sb.rpc('complete_work_order',{p_order_id:Number(i),p_technician_id:technician,p_technician_amount:amount});if(r.error){a.disabled=false;toast(r.error.message);return}X();toast(amount===null?'Orden completada. El monto técnico queda pendiente de registrar.':'Orden completada e ingreso técnico registrado como pendiente.');rf=1}
 else if(k=='openTechPayout'){openTechPayout(i);return}
 else if(k=='applyTechRange'){if(techFrom>techTo){toast('La fecha inicial no puede ser posterior a la fecha final.');return}R();return}
@@ -548,6 +559,29 @@ else if(k=='eC'){fC(f(D.c));return}
 else if(k=='nS'){fS();return}
 else if(k=='eS'){fS(f(D.s));return}
 else if(k=='newConsignment'){fS({item_type:'Producto',ownership_type:'Consignación',qty:1,min_qty:0,price:0});return}
+else if(k=='sellConsignment'){fConsignmentSale(f(D.s));return}
+else if(k=='saveConsignmentSale'){
+ const s=f(D.s);if(!s){toast('No se encontró el equipo seleccionado.');return}
+ const qty=Number($('#cons_sale_qty')?.value||0),price=Number($('#cons_sale_price')?.value||0),total=Math.round(qty*price*100)/100;
+ if(!Number.isInteger(qty)||qty<1||qty>Number(s.qty)){toast('La cantidad debe ser un número entero disponible en inventario.');return}
+ if(!(price>0)||!Number.isFinite(price)||!(total>0)){toast('Indica un precio de venta válido.');return}
+ const seller=$('#cons_sale_seller')?.value||null;if(!seller){toast('Selecciona quién realizó la venta.');return}
+ const clientText=$('#cons_sale_client')?.value.trim()||'',client=clientText?resolveClient(clientText):null;
+ if(clientText&&!client){toast('Selecciona un cliente registrado de la lista o deja el campo vacío para cliente de mostrador.');return}
+ const method=$('#cons_sale_method')?.value||'Efectivo',rawPaid=$('#cons_sale_paid')?.value.trim()||'',paid=rawPaid===''?total:Number(rawPaid),file=$('#cons_sale_voucher')?.files?.[0]||null;
+ if(!Number.isFinite(paid)||paid<0){toast('El dinero recibido debe ser cero o mayor.');return}
+ if(method!=='Efectivo'&&paid>total){toast('El pago por transferencia o tarjeta no puede superar el total de la venta.');return}
+ if(method==='Transferencia'&&paid>0){const err=validateVoucherFile(file);if(err){toast(err);return}}
+ let voucher=null;
+ try{if(method==='Transferencia'&&paid>0)voucher=await uploadInvoiceVoucher(file,'pending')}catch(err){toast(err.message);return}
+ a.disabled=true;
+ const created=await sb.rpc('create_invoice',{p:{kind:'Factura',client_id:client?client.id:null,source_order_id:null,notes:'Venta procesada desde Consignaciones',pay_method:method,paid_amount:paid,issued_on:td(),voucher_path:voucher?.path||null,voucher_name:voucher?.name||null,items:[{kind:'Producto',description:s.name,qty,unit_price:price,stock_id:s.id,order_item_id:null}] }});
+ if(created.error){a.disabled=false;if(voucher)await sb.storage.from('invoice-vouchers').remove([voucher.path]);toast(created.error.message);return}
+ const sellerResult=await sb.rpc('set_invoice_salesperson',{p_invoice_id:Number(created.data),p_salesperson_id:seller});
+ if(sellerResult.error){a.disabled=false;await refresh();X();R();toast('La factura F-'+created.data+' se creó, pero no se pudo atribuir el vendedor: '+sellerResult.error.message);return}
+ await refresh();X();R();toast('Venta registrada en Facturación. El propietario, EFFETTO LAB y el 10% del vendedor quedaron desglosados.');
+ return
+}
 else if(k=='settleCons'){const name=i,rows=D.csales.filter(x=>x.status==='Pendiente'&&x.consignor_name===name);if(!rows.length){toast('Este consignador no tiene ventas pendientes.');return}M('<h2>Liquidar a '+e(name)+'</h2><p class="m">Selecciona las ventas que se incluirán en esta liquidación.</p><div class="c">'+rows.map(x=>{const it=D.ii.find(y=>y.id===x.invoice_item_id);return '<label class="r"><input class="cons-sale-check" type="checkbox" value="'+x.id+'" checked style="width:auto"><span class="g1">F-'+x.invoice_id+' · '+e(it?.description||'Equipo')+'</span><b>'+fm(x.owner_amount)+'</b></label>'}).join('')+'</div><label>Fecha del pago</label><input id="cons_paid_on" type="date" value="'+td()+'"><label>Método de pago</label><select id="cons_method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Otro</option></select><label>Nota (opcional)</label><textarea id="cons_notes" rows="2"></textarea><button class="b" data-a="saveConsSettlement" data-i="'+e(name)+'">Confirmar liquidación</button>');return}
 else if(k=='saveConsSettlement'){const ids=[...document.querySelectorAll('.cons-sale-check:checked')].map(x=>Number(x.value));if(!ids.length){toast('Selecciona al menos una venta.');return}a.disabled=true;const r=await sb.rpc('register_consignment_settlement',{p_consignor_name:i,p_sale_ids:ids,p_paid_on:$('#cons_paid_on')?.value||td(),p_method:$('#cons_method')?.value||'Efectivo',p_notes:$('#cons_notes')?.value||null});if(r.error){a.disabled=false;toast(r.error.message);return}X();await refresh();R();toast('Liquidación registrada correctamente.');return}
 else if(k=='stk'){const s=f(D.s),r=await sb.from('stock').update({qty:Math.max(0,s.qty+(+a.dataset.d))}).eq('id',s.id);if(r.error)toast(r.error.message);rf=1}
@@ -560,7 +594,7 @@ else if(k=='eT'){fT(f(D.t));return}
 else if(k=='biAdd'){const item=findCatalogItem(v('bi')),qty=Number(v('biq')||1);if(!item){toast('Selecciona un producto o servicio del catálogo');return}if(!(qty>0)){toast('La cantidad debe ser mayor que cero');return}if((item.item_type||'Producto')==='Producto'&&!Number.isInteger(qty)){toast('La cantidad de productos físicos debe ser un número entero');return}B.client=$('[data-a=bc]')?.value||B.client;B.lines.push({order_item_id:null,kind:item.item_type||'Producto',description:item.name,qty,unit_price:Number(item.price)||0,stock_id:item.id});R();return}
 else if(k=='brm')B.lines.splice(+i,1);
 else if(k=='bn')B=nb();
-else if(k=='bsave'){if(!B.lines.length){toast('Agrega al menos un concepto');return}B.client=$('[data-a=bc]')?.value??B.client;const cn=B.client.trim(),c=cn?resolveClient(cn):null;if(cn&&!c){const many=D.c.filter(z=>nz(z.name)===nz(cn));toast(many.length>1?'Hay varios clientes con ese nombre; selecciona el que incluye su teléfono.':'No se pudo identificar el cliente. Selecciónalo de la lista o regístralo en Clientes.');return}
+else if(k=='bsave'){if(!B.lines.length){toast('Agrega al menos un concepto');return}const hasConsignmentLine=B.kind==='Factura'&&B.lines.some(l=>l.kind==='Producto'&&D.s.some(s=>s.id==l.stock_id&&s.ownership_type==='Consignación'));if(hasConsignmentLine&&!B.salesperson_id){toast('Selecciona quién realizó la venta para calcular la comisión del 10% sobre la parte de EFFETTO LAB.');return}B.client=$('[data-a=bc]')?.value??B.client;const cn=B.client.trim(),c=cn?resolveClient(cn):null;if(cn&&!c){const many=D.c.filter(z=>nz(z.name)===nz(cn));toast(many.length>1?'Hay varios clientes con ese nombre; selecciona el que incluye su teléfono.':'No se pudo identificar el cliente. Selecciónalo de la lista o regístralo en Clientes.');return}
 const tot=billTotal(),due=billDue(),paid=B.kind=='Factura'?(B.paid===''?due:+B.paid):0;let invoiceVoucher=null;const invoiceFile=$('#invoice_voucher')?.files?.[0]||null;if(B.kind==='Factura'&&B.pay==='Transferencia'&&paid>0){const err=validateVoucherFile(invoiceFile);if(err){toast(err);return}}a.disabled=true;
 try{if(B.kind==='Factura'&&B.pay==='Transferencia'&&paid>0)invoiceVoucher=await uploadInvoiceVoucher(invoiceFile,'pending')}catch(err){a.disabled=false;toast(err.message);return}
 const r=await sb.rpc('create_invoice',{p:{kind:B.kind,client_id:c?c.id:null,source_order_id:B.source_order_id||null,notes:B.notes,pay_method:B.pay,paid_amount:paid,issued_on:td(),voucher_path:invoiceVoucher?.path||null,voucher_name:invoiceVoucher?.name||null,items:B.lines.map(l=>Object.assign({},l,{order_item_id:l.order_item_id||null}))}});a.disabled=false;
@@ -569,8 +603,26 @@ if(B.salesperson_id){const sellerResult=await sb.rpc('set_invoice_salesperson',{
 if(sellerResult.error){B=nb();await refresh();R();toast('Documento guardado, pero el vendedor no quedó atribuido: '+sellerResult.error.message);return}}
 B=nb();await refresh();R();toast('Documento guardado y vendedor atribuido');const dv=D.iv.find(z=>z.id==r.data);if(dv)showRc(invDoc(dv));return}
 else if(k=='vi'){showRc(invDoc(f(D.iv)));return}
-else if(k=='cq'){const iv=f(D.iv);let orderCredit=0;if(iv.source_order_id){const ps=await sb.rpc('get_order_payment_summary',{p_order_id:iv.source_order_id});if(ps.error){toast(ps.error.message);return}orderCredit=Number(ps.data||0)}form('Convertir C-'+iv.id+' en factura',[{k:'pay_method',l:'Método de pago',t:'s',on:'convertmethod',o:MT.map(t=>[t,t])},{k:'paid_amount',l:'Dinero recibido ahora (RD$)',t:'number',d:Math.max(ivT(iv)-orderCredit,0)},{k:'voucher',l:'Comprobante de transferencia (obligatorio si eliges Transferencia)',t:'file',accept:'image/jpeg,image/png,image/webp'}],null,async x=>{const paid=Number(x.paid_amount||0),file=$('#f_voucher')?.files?.[0]||null;if(x.pay_method==='Transferencia'&&paid>0){const err=validateVoucherFile(file);if(err)return{message:err}}let voucher=null;try{if(x.pay_method==='Transferencia'&&paid>0)voucher=await uploadInvoiceVoucher(file,String(iv.id))}catch(err){return{message:err.message}}const r=await sb.rpc('convert_quote',{p_id:iv.id,p_method:x.pay_method,p_paid:paid,p_date:td(),p_voucher_path:voucher?.path||null,p_voucher_name:voucher?.name||null});if(r.error){if(voucher)await sb.storage.from('invoice-vouchers').remove([voucher.path]);return r.error}FS.message='Cotización convertida en factura';return null});const w=$('#w_voucher');if(w)w.style.display='none';return}
-else if(k=='pdf'){await mkPdf();return}
+else if(k=='cq'){
+ const iv=f(D.iv),hasConsignment=D.ii.some(it=>it.invoice_id===iv.id&&it.kind==='Producto'&&D.s.some(s=>s.id==it.stock_id&&s.ownership_type==='Consignación'));
+ let orderCredit=0;
+ if(iv.source_order_id){const ps=await sb.rpc('get_order_payment_summary',{p_order_id:iv.source_order_id});if(ps.error){toast(ps.error.message);return}orderCredit=Number(ps.data||0)}
+ const conversionFields=[{k:'pay_method',l:'Método de pago',t:'s',on:'convertmethod',o:MT.map(t=>[t,t])},{k:'paid_amount',l:'Dinero recibido ahora (RD$)',t:'number',d:Math.max(ivT(iv)-orderCredit,0)},{k:'voucher',l:'Comprobante de transferencia (obligatorio si eliges Transferencia)',t:'file',accept:'image/jpeg,image/png,image/webp'}];
+ if(hasConsignment)conversionFields.push({k:'salesperson_id',l:'¿Quién realizó la venta?',t:'s',o:[['','Seleccionar vendedor'],...D.techs.filter(t=>[TECH_YEISON,TECH_NANDO].includes(t.user_id)&&(mo()||t.user_id===me.id)).map(t=>[t.user_id,t.display_name||(t.user_id===TECH_YEISON?'Jason':'Nando')])]});
+ form('Convertir C-'+iv.id+' en factura',conversionFields,null,async x=>{
+  if(hasConsignment&&!x.salesperson_id)return{message:'Selecciona quién realizó la venta para calcular el 10% correspondiente.'};
+  const paid=Number(x.paid_amount||0),file=$('#f_voucher')?.files?.[0]||null;
+  if(x.pay_method==='Transferencia'&&paid>0){const err=validateVoucherFile(file);if(err)return{message:err}}
+  let voucher=null;
+  try{if(x.pay_method==='Transferencia'&&paid>0)voucher=await uploadInvoiceVoucher(file,String(iv.id))}catch(err){return{message:err.message}}
+  const r=await sb.rpc('convert_quote',{p_id:iv.id,p_method:x.pay_method,p_paid:paid,p_date:td(),p_voucher_path:voucher?.path||null,p_voucher_name:voucher?.name||null});
+  if(r.error){if(voucher)await sb.storage.from('invoice-vouchers').remove([voucher.path]);return r.error}
+  if(x.salesperson_id){const assigned=await sb.rpc('set_invoice_salesperson',{p_invoice_id:iv.id,p_salesperson_id:x.salesperson_id});if(assigned.error){FS.message='Factura creada, pero no se pudo atribuir el vendedor: '+assigned.error.message;return null}}
+  FS.message='Cotización convertida en factura';return null
+ });
+ const w=$('#w_voucher');if(w)w.style.display='none';return
+}
+else if(k=='pdf'){else if(k=='pdf'){await mkPdf();return}
 else if(k=='cpy'){try{await navigator.clipboard.writeText(rcText(RC));toast('Texto copiado')}catch(_){toast('No se pudo copiar')}return}
 else if(k=='addrole'){const n=v('nr').trim();if(!n)return;const r=await sb.from('role_perms').insert({role:n,perm:'panel'});if(r.error)toast(r.error.message);rf=1}
 else if(k=='sv'){a.disabled=true;const o={};FS.fs.forEach(z=>{if(z.t==='file'){o[z.k]=$('#f_'+z.k)?.files||[];return}let x=v('f_'+z.k);o[z.k]=x===''?null:(z.t=='number'||z.n)?+x:x});const er=await FS.save(o);if(er){a.disabled=false;toast(er.message||'No se pudo guardar');return}const done=FS.message||'Guardado';FS.message=null;X();toast(done);rf=1}
@@ -581,6 +633,7 @@ document.addEventListener('change',async ev=>{const t=ev.target,k=t.dataset.a,i=
 if(k=='src'){$('#w_referred_by').style.display=t.value=='Referido'?'':'none';return}
 if(k=='paymethod'){const w=$('#pay_voucher_wrap');if(w)w.style.display=t.value==='Transferencia'?'':'none';return}
 if(k=='invoicepaymethod'||k=='convertmethod'){const w=$('#w_voucher');if(w)w.style.display=t.value==='Transferencia'?'':'none';return}
+if(k=='consSaleMethod'){const w=$('#cons_sale_voucher_wrap');if(w)w.style.display=t.value==='Transferencia'?'':'none';return}
 if(k=='mint'){const r=await sb.rpc('update_maintenance_interval',{p_followup_id:Number(i),p_interval_months:Number(t.value)});if(r.error){toast(r.error.message);return}await refresh();R();toast('Intervalo de mantenimiento actualizado');return}
 if(k=='stocktype'||k=='ownershiptype'||k=='consignmenttermstype'){updateStockFormFields();return}
 if(k=='bc'){B.client=t.value;return}
