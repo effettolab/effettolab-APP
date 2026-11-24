@@ -7,4 +7,3 @@ account_id = "1ce5f80c772cc71aee05f582e9e22432"
 directory = "./"
 binding = "ASSETS"
 run_worker_first = true
-exclude = ["worker.js", "wrangler.toml", "wrangler.jsonc", ".github/**"]
