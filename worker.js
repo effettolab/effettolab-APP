@@ -6,7 +6,15 @@ export default {
     const assetUrl = new URL(request.url);
     assetUrl.protocol = 'https:';
     assetUrl.hostname = 'd29dc2e6-long-heart-03db.nangoespinal1.workers.dev';
-    const response = await env.ASSETS.fetch(request);
+    let response;
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+      const live = await fetch('https://raw.githubusercontent.com/effettolab/effettolab-APP/main/index.html', { headers: { 'cache-control': 'no-cache' } });
+      if (!live.ok) return new Response('No se pudo cargar la versión publicada de la aplicación.', { status: 503 });
+      const html = await live.text();
+      response = new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });
+    } else {
+      response = await env.ASSETS.fetch(request);
+    }
     if (!response || !response.ok) return response;
     const type = response.headers.get('content-type') || '';
     if (request.method === 'GET' && url.pathname === '/manifest.json' && type.includes('json')) {
