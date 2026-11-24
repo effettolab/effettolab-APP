@@ -268,11 +268,35 @@ function updateNotificationBell(){
 }
 function openNotifications(){
  const rows=notificationRows.filter(x=>!x.resolved_at);
- M('<h2>Notificaciones</h2><p class="m">Avisos del taller y seguimiento financiero.</p><div class="r" style="margin-bottom:10px"><button class="b o" data-a="notifReadAll">Marcar todas como leídas</button></div>'+
+ M('<h2>Notificaciones</h2><p class="m">Avisos del taller y seguimiento financiero.</p><div class="r" style="margin-bottom:10px;flex-wrap:wrap"><button class="b" data-a="enablePush">Activar Push en este dispositivo</button><button class="b o" data-a="notifReadAll">Marcar todas como leídas</button></div><p class="m">Para recibir avisos con la aplicación cerrada, activa los permisos de notificación en este dispositivo.</p>'+
  (rows.map(x=>'<div class="c" style="border-left:4px solid '+(x.priority==='urgent'?'var(--er)':x.priority==='high'?'#c58b22':'var(--ac)')+';opacity:'+(x.read_at?'.72':'1')+'"><div class="r"><b class="g1">'+e(x.title)+'</b><span class="t">'+e(x.category)+'</span></div><p style="margin:7px 0">'+e(x.body)+'</p><div class="m"><span>'+new Date(x.created_at).toLocaleString('es-DO')+'</span>'+(x.read_at?'':'<button class="b o" data-a="notifRead" data-i="'+x.id+'">Marcar leída</button>')+'<button class="b" data-a="notifGo" data-i="'+x.id+'">Abrir sección</button></div></div>').join('')||'<p class="m">No tienes notificaciones pendientes.</p>'));
+}
+function pushKeyBytes(base64url){
+ const padding='='.repeat((4-base64url.length%4)%4);
+ const raw=atob((base64url+padding).replace(/-/g,'+').replace(/_/g,'/'));
+ return Uint8Array.from(raw,c=>c.charCodeAt(0));
+}
+async function enablePushNotifications(){
+ if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){toast('Este navegador no admite notificaciones Push.');return}
+ if(!window.isSecureContext){toast('Push requiere HTTPS.');return}
+ const permission=await Notification.requestPermission();
+ if(permission!=='granted'){toast('No se concedió permiso para notificaciones.');return}
+ const cfg=await sb.functions.invoke('push-notifications',{body:{action:'config'}});
+ if(cfg.error||!cfg.data?.publicKey){console.error(cfg.error);toast('No se pudo preparar Push. Inténtalo de nuevo.');return}
+ const reg=await navigator.serviceWorker.ready;
+ let sub=await reg.pushManager.getSubscription();
+ if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushKeyBytes(cfg.data.publicKey)});
+ const data=sub.toJSON();
+ const saved=await sb.from('push_subscriptions').upsert({
+  user_id:me.id,endpoint:data.endpoint,p256dh:data.keys.p256dh,auth_key:data.keys.auth,user_agent:navigator.userAgent,last_seen_at:new Date().toISOString()
+ },{onConflict:'endpoint'});
+ if(saved.error){console.error(saved.error);toast('El permiso está activo, pero no se pudo registrar este dispositivo.');return}
+ toast('Notificaciones Push activadas en este dispositivo.');
 }
 async function initNotificationCenter(){
  await loadNotifications();
+ const cfg=await sb.functions.invoke('push-notifications',{body:{action:'config'}});
+ if(cfg.error)console.warn('No se pudo inicializar Push',cfg.error);
  if(notificationChannel){await sb.removeChannel(notificationChannel);notificationChannel=null}
  notificationChannel=sb.channel('effetto-notifications-'+me.id)
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'user_id=eq.'+me.id},async payload=>{
@@ -550,6 +574,7 @@ async function saveOrderFromForm(){
 document.addEventListener('click',async ev=>{const a=ev.target.closest('[data-a]');if(!a||['SELECT','INPUT'].includes(a.tagName))return;const k=a.dataset.a,i=a.dataset.i;let rf=0;
 const f=(arr)=>arr.find(z=>z.id==i);
 if(k=='notifications'){openNotifications();return}
+else if(k=='enablePush'){await enablePushNotifications();return}
 else if(k=='notifRead'){await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('id',i).eq('user_id',me.id);await loadNotifications();openNotifications();return}
 else if(k=='notifReadAll'){await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('user_id',me.id).is('read_at',null);await loadNotifications();openNotifications();return}
 else if(k=='notifGo'){const n=notificationRows.find(x=>x.id===i);if(n){const target=n.category==='maintenance'?'seguimiento':n.category==='orders'?'ordenes':n.category==='finance'?'facturacion':'panel';if(can(target))vw=target;await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('id',i).eq('user_id',me.id);await loadNotifications();X();R()}return}
