@@ -416,7 +416,7 @@ const fS=s=>{
   {k:'min_qty',l:'Stock mínimo',t:'number',d:0},
   {k:'price',l:'Precio de venta (RD$)',t:'number',d:0}
  ].concat(mo()?[{k:'cost',l:'Costo unitario propio (RD$; dejar vacío si no está confirmado)',t:'number'}]:[]).concat([{k:'photos',l:'Fotografías (JPG, PNG, WebP o HEIC; hasta 10 MB por foto)',t:'file',accept:'image/jpeg,image/png,image/webp,image/heic,image/heif',multiple:true}]);
- form(s?'Editar artículo':'Nuevo artículo',fields,init,async x=>{
+ form(s?.id?'Editar artículo':'Nuevo artículo',fields,init,async x=>{
   if(!x.name)return{message:'Falta el nombre'};
   const files=Array.from(x.photos||[]);delete x.photos;
   x.item_type=x.item_type||'Producto';
@@ -434,7 +434,7 @@ const fS=s=>{
   if(x.item_type==='Servicio'){x.qty=0;x.min_qty=0;x.ownership_type='Propio';x.consignor_name=null;x.consignment_notes=null;x.consignment_terms_type=null;x.consignment_terms_value=null}
   else{x.qty=Math.max(0,Number(x.qty)||0);x.min_qty=Math.max(0,Number(x.min_qty)||0)}
   x.price=Math.max(0,Number(x.price)||0);
-  const r=s?await sb.from('stock').update(x).eq('id',s.id).select().single():await sb.from('stock').insert(x).select().single();
+  const r=s?.id?await sb.from('stock').update(x).eq('id',s.id).select().single():await sb.from('stock').insert(x).select().single();
   if(r.error)return r.error;
   if(mo()&&r.data.item_type==='Producto'&&r.data.ownership_type==='Propio'){if(cost!==null&&cost!==undefined&&Number(cost)>0){const costResult=await sb.from('stock_costs').upsert({stock_id:r.data.id,cost:Number(cost)});if(costResult.error)return costResult.error}else{const clearCost=await sb.from('stock_costs').delete().eq('stock_id',r.data.id);if(clearCost.error)return clearCost.error}}
   if(files.length){const result=await uploadStockPhotos(r.data.id,files);if(result.warnings.length)FS.message=`Artículo guardado; ${result.uploaded} foto(s) subida(s). Avisos: ${result.warnings.join(' · ')}`;else FS.message=`Artículo guardado con ${result.uploaded} foto(s).`}
