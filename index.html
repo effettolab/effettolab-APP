@@ -79,6 +79,8 @@ label{display:block;font-size:13px;color:var(--mu);margin-top:8px}
 @media(max-width:560px){.order-grid{grid-template-columns:1fr}.order-grid .full{grid-column:auto}.photo-strip a,.photo-strip img{width:74px}.photo-strip img{height:62px}}
 
 .tech-assign{border:1px solid var(--bd);border-radius:12px;padding:12px;margin:8px 0}.tech-choices{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px}.tech-choice{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700}.tech-choice input{position:absolute;opacity:0;pointer-events:none}.tech-radio{width:19px;height:19px;border:2px solid var(--mu);border-radius:50%;display:inline-block;position:relative}.tech-choice input:checked+.tech-radio{border-color:var(--ac)}.tech-choice input:checked+.tech-radio:after{content:"";position:absolute;inset:4px;background:var(--ac);border-radius:50%}.tech-amount{margin-top:12px}
+.el-notif-button{position:relative;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.el-notif-count{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 5px;border-radius:99px;background:var(--er);color:#fff;font-size:11px}
+@media(max-width:560px){.el-notif-button span:not(.el-notif-count){display:none}.el-notif-button{padding:8px 10px}}
 </style><script src='https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'></script></head>
 <body><div id="app"></div><div id="m"></div><div id="t"></div>
 <script>
@@ -154,7 +156,7 @@ async function boot(u){
  const p=await sb.from('profiles').select('*').eq('id',u.id).maybeSingle();me=p.data;
  if(!B.salesperson_id&&[TECH_YEISON,TECH_NANDO].includes(me?.id))B.salesperson_id=me.id;
  if(!me||me.role=='Sin rol'){await sb.auth.signOut();L('Tu cuenta todavía no tiene un rol asignado.');return}
- vw='panel';await refresh();R();
+ vw='panel';await refresh();R();await initNotificationCenter();
 }
 function L(msg){me=null;$('#app').innerHTML=`<main style="max-width:380px;padding-top:12vh"><h2>EFFETTO LAB</h2><p class="m">Inicia sesión para continuar</p><div class="c"><label>Correo</label><input id="le" type="email" autocomplete="username"><label>Contraseña</label><input id="lp" type="password" autocomplete="current-password"><p class="er" id="lm">${e(msg||'')}</p><button class="b" data-a="in">Entrar</button></div></main>`}
 
@@ -250,8 +252,37 @@ ${D.u.map(u=>`<div class="c"><label style="margin:0">Nombre</label><input data-a
 <div class="c"><b>Nuevo rol</b><div class="r"><input class="g1" id="nr" placeholder="Ej.: Contabilidad"><button class="b" data-a="addrole">Agregar</button></div></div>
 ${rs.filter(r=>r!='Administrador').map(r=>`<div class="c"><b>Permisos del rol ${e(r)}</b><div class="r" style="margin-top:6px">${Object.keys(PM).map(k=>`<label class="r" style="margin:0 10px 0 0"><input type="checkbox" style="width:auto" data-a="pm" data-r="${e(r)}" data-k="${k}" ${D.rp.some(x=>x.role==r&&x.perm==k)?'checked':''}>${PM[k]}</label>`).join('')}</div></div>`).join('')}`}};
 
+
+let notificationRows=[],notificationChannel=null;
+async function loadNotifications(){
+ if(!me||!sb)return;
+ const r=await sb.from('notifications').select('*').eq('user_id',me.id).order('created_at',{ascending:false}).limit(50);
+ if(r.error){console.warn('No se pudieron cargar notificaciones',r.error.message);return}
+ notificationRows=r.data||[];updateNotificationBell();
+}
+function updateNotificationBell(){
+ const b=document.querySelector('[data-a="notifications"]');if(!b)return;
+ const n=notificationRows.filter(x=>!x.read_at&&!x.resolved_at).length;
+ b.innerHTML='♢ <span>Notificaciones</span>'+(n?'<b class="el-notif-count">'+(n>99?'99+':n)+'</b>':'');
+ b.setAttribute('aria-label',n+' notificaciones sin leer');
+}
+function openNotifications(){
+ const rows=notificationRows.filter(x=>!x.resolved_at);
+ M('<h2>Notificaciones</h2><p class="m">Avisos del taller y seguimiento financiero.</p><div class="r" style="margin-bottom:10px"><button class="b o" data-a="notifReadAll">Marcar todas como leídas</button></div>'+
+ (rows.map(x=>'<div class="c" style="border-left:4px solid '+(x.priority==='urgent'?'var(--er)':x.priority==='high'?'#c58b22':'var(--ac)')+';opacity:'+(x.read_at?'.72':'1')+'"><div class="r"><b class="g1">'+e(x.title)+'</b><span class="t">'+e(x.category)+'</span></div><p style="margin:7px 0">'+e(x.body)+'</p><div class="m"><span>'+new Date(x.created_at).toLocaleString('es-DO')+'</span>'+(x.read_at?'':'<button class="b o" data-a="notifRead" data-i="'+x.id+'">Marcar leída</button>')+'<button class="b" data-a="notifGo" data-i="'+x.id+'">Abrir sección</button></div></div>').join('')||'<p class="m">No tienes notificaciones pendientes.</p>'));
+}
+async function initNotificationCenter(){
+ await loadNotifications();
+ if(notificationChannel){await sb.removeChannel(notificationChannel);notificationChannel=null}
+ notificationChannel=sb.channel('effetto-notifications-'+me.id)
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'user_id=eq.'+me.id},async payload=>{
+    await loadNotifications();
+    if(payload.new){toast('Nueva notificación: '+payload.new.title)}
+  }).subscribe();
+}
+
 function R(){if(!me)return;if(!can(vw))vw='panel';
-$('#app').innerHTML=`<header><img class="brand" src="assets/Logo.png" alt="Logo Effetto Lab"><div class="brandline"><span class="n">GESTIÓN DEL TALLER</span><small></small></div><span class="m">${e(me.name)}, ${e(me.role)}</span><button class="b o" data-a="out">Salir</button></header><nav aria-label="Navegación principal">${Object.keys(MODS).filter(k=>can(k)).map(k=>`<button data-a="nav" data-i="${k}" class="${k==vw?'on':''}">${MODS[k]}</button>`).join('')}</nav><main>${V[vw]()}</main>`}
+$('#app').innerHTML=`<header><img class="brand" src="assets/Logo.png" alt="Logo Effetto Lab"><div class="brandline"><span class="n">GESTIÓN DEL TALLER</span><small></small></div><span class="m">${e(me.name)}, ${e(me.role)}</span><button class="b o el-notif-button" data-a="notifications" aria-label="Notificaciones">♢ <span>Notificaciones</span></button><button class="b o" data-a="out">Salir</button></header><nav aria-label="Navegación principal">${Object.keys(MODS).filter(k=>can(k)).map(k=>`<button data-a="nav" data-i="${k}" class="${k==vw?'on':''}">${MODS[k]}</button>`).join('')}</nav><main>${V[vw]()}</main>`}
 
 
 
@@ -518,7 +549,11 @@ async function saveOrderFromForm(){
 }
 document.addEventListener('click',async ev=>{const a=ev.target.closest('[data-a]');if(!a||['SELECT','INPUT'].includes(a.tagName))return;const k=a.dataset.a,i=a.dataset.i;let rf=0;
 const f=(arr)=>arr.find(z=>z.id==i);
-if(k=='nav')vw=i;
+if(k=='notifications'){openNotifications();return}
+else if(k=='notifRead'){await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('id',i).eq('user_id',me.id);await loadNotifications();openNotifications();return}
+else if(k=='notifReadAll'){await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('user_id',me.id).is('read_at',null);await loadNotifications();openNotifications();return}
+else if(k=='notifGo'){const n=notificationRows.find(x=>x.id===i);if(n){const target=n.category==='maintenance'?'seguimiento':n.category==='orders'?'ordenes':n.category==='finance'?'facturacion':'panel';if(can(target))vw=target;await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('id',i).eq('user_id',me.id);await loadNotifications();X();R()}return}
+else if(k=='nav')vw=i;
 else if(k=='fl')fl=i;
 else if(k=='x'){X();return}
 else if(k=='out'){await sb.auth.signOut();return}
